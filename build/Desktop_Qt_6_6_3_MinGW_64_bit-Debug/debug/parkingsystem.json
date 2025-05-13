@@ -1,0 +1,10 @@
+{
+    "IP": "127.0.0.1",
+    "account": "root",
+    "databasename": "park",
+    "p_count": 300,
+    "p_fee": 10,
+    "park_name": "1",
+    "password": "qwertyuiop957",
+    "port": 3306
+}
