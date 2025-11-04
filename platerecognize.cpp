@@ -12,6 +12,7 @@
 #include<QNetworkRequest>
 #include<QJsonArray>
 #include<QLabel>
+#include<QVideoFrame>
 PlateRecognize::PlateRecognize(QObject *parent)
     : QObject{parent}
 {
@@ -30,7 +31,7 @@ PlateRecognize::PlateRecognize(QObject *parent)
 
    // manager = new QNetworkAccessManager(this);
     //connect(manager, &QNetworkAccessManager::finished, this, &PlateRecognize::handleNetworkReply);
-
+    carNumber="1";
 }
 
 void PlateRecognize::Recognize(QImage Img)
@@ -76,22 +77,22 @@ void PlateRecognize::Recognize(QImage Img)
     vector<Vec4i>hierarchy;
     //高斯模糊
     GaussianBlur(src,image,Size(3,3),0);
-    imshow("gauss",image);
+    //imshow("gauss",image);
     //转灰度图
     cvtColor(image,gray,COLOR_BGR2GRAY);
-    imshow("gray",gray);
+    //imshow("gray",gray);
     //sobel算子进行边缘检测
     Sobel(gray,sobel_x,CV_16S,1,0);
     convertScaleAbs(sobel_x,abs_x);
-    imshow("sobel",abs_x);
+    //imshow("sobel",abs_x);
     image=abs_x;
     //自适应阈值处理
     threshold(image,image,0,255,THRESH_OTSU);
-    imshow("threash",image);
+    //imshow("threash",image);
     //闭运算
     Mat kernelx=getStructuringElement(MORPH_RECT,Size(17,5));
     morphologyEx(image,image,MORPH_CLOSE,kernelx,Point(-1,-1),1);
-    imshow("close",image);
+    //imshow("close",image);
     Mat kernelX=getStructuringElement(MORPH_RECT,Size(20,1));
     Mat kernelY=getStructuringElement(MORPH_RECT,Size(1,19));
     //腐蚀膨胀
@@ -99,15 +100,15 @@ void PlateRecognize::Recognize(QImage Img)
     erode(image,image,kernelX);
     dilate(image,image,kernelY);
     erode(image,image,kernelY);
-    imshow("dilate erode",image);
+    //imshow("dilate erode",image);
     //中值滤波
     medianBlur(image,image,15);
-    imshow("mediablur",image);
+    //imshow("mediablur",image);
     //寻找轮廓
     findContours(image,contours,hierarchy,RETR_EXTERNAL,CHAIN_APPROX_SIMPLE);
     Mat image1=src.clone();
     drawContours(image1,contours,-1, Scalar(255, 0, 255), 5);
-    imshow("contours",image1);
+    //imshow("contours",image1);
     for (auto i:contours) {
         Rect rect=boundingRect(i);
         int x=rect.x;
@@ -117,11 +118,91 @@ void PlateRecognize::Recognize(QImage Img)
         if (width > (height * 1.8) && width < (height * 4)) {
             // 提取车牌区域
             Mat image2 = src(Rect(x, y, width, height));
-            imshow("image2", image2);
-            waitKey(0);
+            //imshow("image2", image2);
+            //waitKey(0);
         }
     }
     ocrPlate(Img);
+}
+
+void PlateRecognize::frameRecognize(QVideoFrame frame)
+{
+    if (!frame.isValid()) {
+        qDebug() << "无效的 QVideoFrame！";
+        return;
+    }
+
+    QImage frameImage = frame.toImage();
+    if (frameImage.isNull()) {
+        qDebug() << "无法将 frame 转换为 QImage！";
+        return;
+    }
+
+    Mat bgr = QImageToMat(frameImage);
+    if (bgr.empty()) {
+        qDebug() << "无法将 QImage 转换为 Mat！";
+        return;
+    }
+    //imshow("1",bgr);
+    Mat image,gray;
+    Mat sobel_x,abs_x;
+    vector<vector<Point>>contours;
+    vector<Vec4i>hierarchy;
+    //高斯模糊
+    GaussianBlur(bgr,image,Size(3,3),0);
+    //imshow("gauss",image);
+    //转灰度图
+    cvtColor(image,gray,COLOR_BGR2GRAY);
+    //imshow("gray",gray);
+    //sobel算子进行边缘检测
+    Sobel(gray,sobel_x,CV_16S,1,0);
+    convertScaleAbs(sobel_x,abs_x);
+    //imshow("sobel",abs_x);
+    image=abs_x;
+    //自适应阈值处理
+    threshold(image,image,0,255,THRESH_OTSU);
+    //imshow("threash",image);
+    //闭运算
+    Mat kernelx=getStructuringElement(MORPH_RECT,Size(17,5));
+    morphologyEx(image,image,MORPH_CLOSE,kernelx,Point(-1,-1),1);
+    //imshow("close",image);
+    Mat kernelX=getStructuringElement(MORPH_RECT,Size(20,1));
+    Mat kernelY=getStructuringElement(MORPH_RECT,Size(1,19));
+    //腐蚀膨胀
+    dilate(image,image,kernelX);
+    erode(image,image,kernelX);
+    dilate(image,image,kernelY);
+    erode(image,image,kernelY);
+    //imshow("dilate erode",image);
+    //中值滤波
+    medianBlur(image,image,15);
+    //imshow("mediablur",image);
+    //寻找轮廓
+    findContours(image,contours,hierarchy,RETR_EXTERNAL,CHAIN_APPROX_SIMPLE);
+    Mat image1=bgr.clone();
+    drawContours(image1,contours,-1, Scalar(255, 0, 255), 5);
+    //imshow("contours",image1);
+    for (const auto& contour : contours) {
+        Rect rect=boundingRect(contour);
+        //int x=rect.x;
+        //int y = rect.y;
+        int width = rect.width;
+        int height = rect.height;
+        if (width > (height * 1.8) && width < (height * 4)) {
+            // 提取车牌区域
+            //Mat image2 = bgr(Rect(x, y, width, height));
+            //imshow("image2", image2);
+            //waitKey(0);
+            QImage ocrImage=matToImage(image1);
+            ocrPlate(ocrImage);
+        }
+    }
+    bgr.release();
+    image.release();
+    gray.release();
+    sobel_x.release();
+    abs_x.release();
+    image1.release();
 }
 
 QImage PlateRecognize::matToImage(const Mat &mat)
@@ -186,24 +267,29 @@ void PlateRecognize::ocrPlate(const QImage plateImage)
         if (doc.object().contains("words_result")) {
             QString plateNumber = doc.object()["words_result"].toObject()["number"].toString();
             qDebug()<<plateNumber;
-            QJsonObject rootObj = doc.object();
-            QJsonObject wordsResult = rootObj["words_result"].toObject();
-            QJsonArray vertexes = wordsResult["vertexes_location"].toArray();
+            if(carNumber==plateNumber){
+                return;
+            }else {
+                QJsonObject rootObj = doc.object();
+                QJsonObject wordsResult = rootObj["words_result"].toObject();
+                QJsonArray vertexes = wordsResult["vertexes_location"].toArray();
 
-            QVector<QPoint> points;
-            for (const QJsonValue &val : vertexes) {
-                QJsonObject pointObj = val.toObject();
-                int x = pointObj["x"].toInt();
-                int y = pointObj["y"].toInt();
-                points.append(QPoint(x, y));
-            }
+                QVector<QPoint> points;
+                for (const QJsonValue &val : vertexes) {
+                    QJsonObject pointObj = val.toObject();
+                    int x = pointObj["x"].toInt();
+                    int y = pointObj["y"].toInt();
+                    points.append(QPoint(x, y));
+                }
 
-            // 示例：打印这些点
-            for (const QPoint &pt : points) {
-                qDebug() << "x:" << pt.x() << ", y:" << pt.y();
+                // 示例：打印这些点
+                for (const QPoint &pt : points) {
+                    qDebug() << "x:" << pt.x() << ", y:" << pt.y();
+                }
+                carNumber=plateNumber;
+                QImage result = cropPlateFromImage(plateImage, points);
+                emit Recogned(result, carNumber);
             }
-            QImage result = cropPlateFromImage(plateImage, points);
-            emit Recogned(result, plateNumber);
         } else {
             emit Recogned(QImage(), "识别失败");
         }
@@ -243,21 +329,75 @@ void PlateRecognize::fetchAccessTokenSync()
 
 Mat PlateRecognize::QImageToMat(const QImage &image)
 {
-    switch (image.format()) {
+    // switch (image.format()) {
+    // case QImage::Format_RGB32:
+    // case QImage::Format_ARGB32:
+    // case QImage::Format_ARGB32_Premultiplied:
+    //     return cv::Mat(image.height(), image.width(), CV_8UC4,
+    //                    const_cast<uchar *>(image.bits()), image.bytesPerLine()).clone();
+    // case QImage::Format_RGB888:
+    //     return cv::Mat(image.height(), image.width(), CV_8UC3,
+    //                    const_cast<uchar *>(image.bits()), image.bytesPerLine()).clone();
+    // case QImage::Format_Grayscale8:
+    //     return cv::Mat(image.height(), image.width(), CV_8UC1,
+    //                    const_cast<uchar *>(image.bits()), image.bytesPerLine()).clone();
+    // default:
+    //     qDebug() << "Unsupported QImage format!";
+    //     return cv::Mat();
+    // }
+
+    if (image.isNull()) {
+        qDebug() << "QImage 为空或无效！";
+        return Mat();
+    }
+
+    QImage convertedImage;
+    QImage::Format format = image.format();
+
+    // 处理不支持的格式
+    switch (format) {
     case QImage::Format_RGB32:
     case QImage::Format_ARGB32:
     case QImage::Format_ARGB32_Premultiplied:
-        return cv::Mat(image.height(), image.width(), CV_8UC4,
-                       const_cast<uchar *>(image.bits()), image.bytesPerLine()).clone();
     case QImage::Format_RGB888:
-        return cv::Mat(image.height(), image.width(), CV_8UC3,
-                       const_cast<uchar *>(image.bits()), image.bytesPerLine()).clone();
     case QImage::Format_Grayscale8:
-        return cv::Mat(image.height(), image.width(), CV_8UC1,
-                       const_cast<uchar *>(image.bits()), image.bytesPerLine()).clone();
+        // 这些格式直接支持
+        break;
     default:
-        qDebug() << "Unsupported QImage format!";
-        return cv::Mat();
+        // 将不支持的格式转换为 Format_RGB32
+        //qDebug() << "转换不支持的 QImage 格式：" << format;
+        convertedImage = image.convertToFormat(QImage::Format_RGB32);
+        break;
+    }
+
+    const QImage &targetImage = convertedImage.isNull() ? image : convertedImage;
+
+    // 将 QImage 转换为 Mat
+    switch (targetImage.format()) {
+    case QImage::Format_RGB32:
+    case QImage::Format_ARGB32:
+    case QImage::Format_ARGB32_Premultiplied: {
+        Mat mat(targetImage.height(), targetImage.width(), CV_8UC4,
+                const_cast<uchar *>(targetImage.bits()), targetImage.bytesPerLine());
+        // 将 ARGB/RGB32 (内存中为 BGRA) 转换为 BGR
+        Mat bgr;
+        cvtColor(mat, bgr, COLOR_BGRA2BGR);
+        return bgr.clone();
+    }
+    case QImage::Format_RGB888: {
+        Mat mat(targetImage.height(), targetImage.width(), CV_8UC3,
+                const_cast<uchar *>(targetImage.bits()), targetImage.bytesPerLine());
+        // 将 RGB 转换为 BGR
+        Mat bgr;
+        cvtColor(mat, bgr, COLOR_RGB2BGR);
+        return bgr.clone();
+    }
+    case QImage::Format_Grayscale8:
+        return Mat(targetImage.height(), targetImage.width(), CV_8UC1,
+                   const_cast<uchar *>(targetImage.bits()), targetImage.bytesPerLine()).clone();
+    default:
+        qDebug() << "转换后仍不支持的 QImage 格式！";
+        return Mat();
     }
 }
 

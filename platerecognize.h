@@ -14,6 +14,8 @@
 #include <QByteArray>
 #include <QBuffer>
 #include<QSettings>
+#include<QFrame>
+#include<QVideoFrame>
 using namespace cv;
 using namespace std;
 class PlateRecognize : public QObject
@@ -26,6 +28,7 @@ signals:
     void Recogned(QImage qplateImg,QString plateStr);
 public slots:
     void Recognize(QImage Img);
+    void frameRecognize(QVideoFrame frame);
    // void handleNetworkReply(QNetworkReply *reply);
 private:
     QNetworkAccessManager *manager;
@@ -39,6 +42,7 @@ private:
     double weightBlueRed;
     double weightBlueGreen;
     QString accesstoken;
+    QString carNumber;
 };
 
 #endif // PLATERECOGNIZE_H

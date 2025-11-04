@@ -43,17 +43,19 @@ constexpr auto qt_meta_stringdata_CLASSmysqlENDCLASS = QtMocHelpers::stringData(
     "",
     "parking_now_count",
     "park_reduce",
+    "pname",
     "park_increase"
 );
 #else  // !QT_MOC_HAS_STRING_DATA
 struct qt_meta_stringdata_CLASSmysqlENDCLASS_t {
-    uint offsetsAndSizes[12];
+    uint offsetsAndSizes[14];
     char stringdata0[6];
     char stringdata1[25];
     char stringdata2[1];
     char stringdata3[18];
     char stringdata4[12];
-    char stringdata5[14];
+    char stringdata5[6];
+    char stringdata6[14];
 };
 #define QT_MOC_LITERAL(ofs, len) \
     uint(sizeof(qt_meta_stringdata_CLASSmysqlENDCLASS_t::offsetsAndSizes) + ofs), len 
@@ -64,13 +66,15 @@ Q_CONSTINIT static const qt_meta_stringdata_CLASSmysqlENDCLASS_t qt_meta_stringd
         QT_MOC_LITERAL(31, 0),  // ""
         QT_MOC_LITERAL(32, 17),  // "parking_now_count"
         QT_MOC_LITERAL(50, 11),  // "park_reduce"
-        QT_MOC_LITERAL(62, 13)   // "park_increase"
+        QT_MOC_LITERAL(62, 5),  // "pname"
+        QT_MOC_LITERAL(68, 13)   // "park_increase"
     },
     "mysql",
     "now_count_changed_signal",
     "",
     "parking_now_count",
     "park_reduce",
+    "pname",
     "park_increase"
 };
 #undef QT_MOC_LITERAL
@@ -94,15 +98,15 @@ Q_CONSTINIT static const uint qt_meta_data_CLASSmysqlENDCLASS[] = {
        1,    1,   32,    2, 0x06,    1 /* Public */,
 
  // slots: name, argc, parameters, tag, flags, initial metatype offsets
-       4,    0,   35,    2, 0x0a,    3 /* Public */,
-       5,    0,   36,    2, 0x0a,    4 /* Public */,
+       4,    1,   35,    2, 0x0a,    3 /* Public */,
+       6,    1,   38,    2, 0x0a,    5 /* Public */,
 
  // signals: parameters
     QMetaType::Void, QMetaType::Int,    3,
 
  // slots: parameters
-    QMetaType::Void,
-    QMetaType::Void,
+    QMetaType::Void, QMetaType::QString,    5,
+    QMetaType::Void, QMetaType::QString,    5,
 
        0        // eod
 };
@@ -121,8 +125,10 @@ Q_CONSTINIT const QMetaObject mysql::staticMetaObject = { {
         QtPrivate::TypeAndForceComplete<int, std::false_type>,
         // method 'park_reduce'
         QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<QString, std::false_type>,
         // method 'park_increase'
-        QtPrivate::TypeAndForceComplete<void, std::false_type>
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<QString, std::false_type>
     >,
     nullptr
 } };
@@ -134,8 +140,8 @@ void mysql::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void 
         (void)_t;
         switch (_id) {
         case 0: _t->now_count_changed_signal((*reinterpret_cast< std::add_pointer_t<int>>(_a[1]))); break;
-        case 1: _t->park_reduce(); break;
-        case 2: _t->park_increase(); break;
+        case 1: _t->park_reduce((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        case 2: _t->park_increase((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
         default: ;
         }
     } else if (_c == QMetaObject::IndexOfMethod) {

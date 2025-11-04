@@ -138,10 +138,9 @@ QSqlDatabase mysql::get_db()
     return db;
 }
 
-void mysql::park_reduce()
+void mysql::park_reduce(QString pname)
 {
-    QString name=this->parkingname;
-    QString sql=QStringLiteral("UPDATE parking SET P_now_count = P_now_count - 1 WHERE P_name = '%1';").arg(name);
+    QString sql=QStringLiteral("UPDATE parking SET P_now_count = P_now_count - 1 WHERE P_name = '%1';").arg(pname);
     if(bool_execute(sql)){
         parking_now_count--;
         qDebug()<<"reduce success";
@@ -150,15 +149,14 @@ void mysql::park_reduce()
     }
 }
 
-void mysql::park_increase()
+void mysql::park_increase(QString pname)
 {
-    QString name=this->parkingname;
-    QString sql=QStringLiteral("UPDATE parking SET P_now_count = P_now_count + 1 WHERE P_name = '%1';").arg(name);
+    QString sql=QStringLiteral("UPDATE parking SET P_now_count = P_now_count + 1 WHERE P_name = '%1';").arg(pname);
     if(bool_execute(sql)){
         parking_now_count++;
-        qDebug()<<"reduce success";
+        qDebug()<<"increase success";
     }else {
-        qDebug()<<"reduce occur error";
+        qDebug()<<"increase  error";
     }
 }
 

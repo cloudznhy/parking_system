@@ -68,6 +68,17 @@ private slots:
 
     void on_cardelete_clicked();
 
+    void on_ctrolButton_clicked();
+
+    void on_parkRefreshButton_clicked();
+    void on_parkAddButton_clicked();
+    void on_parkDeleteButton_clicked();
+    void on_parkUpdateButton_clicked();
+
+    void on_parkmessage_clicked();
+
+    void on_parkcomboBox_currentIndexChanged(int index);
+
 private:
     void video_Init();
     void camera_Init();
@@ -86,8 +97,10 @@ private:
     UpdatePie* updatepie;
     mysql&mysqlc=mysql::getInstance();
     QSqlQuery q;
-    void park_num();
+    void park_num(QString pname);
     void createPie(int reserve);
+    void loadParkTable();
+    void loadParkingComboBox(); // 从数据库加载车库名到下拉框
     QPieSeries*series;
     QChart*chart;
     QChartView*chartview;

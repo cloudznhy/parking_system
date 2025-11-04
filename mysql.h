@@ -42,8 +42,8 @@ public:
 signals:
     void now_count_changed_signal(int parking_now_count);
 public slots:
-    void park_reduce();
-    void park_increase();
+    void park_reduce(QString pname);
+    void park_increase(QString pname);
 private:
     static QMutex mutex;
 

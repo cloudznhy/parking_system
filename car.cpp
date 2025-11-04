@@ -2,28 +2,37 @@
 #include "ui_car.h"
 #include<QImageCapture>
 #include<QVideoSink>
+#include<QInputDialog>
+#include<QHeaderView>
+#include"parkdialog.h"
 car::car(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::car)
 {
+    //this->setWindowFlags(Qt::FramelessWindowHint);
     ui->setupUi(this);
     setWindowTitle("主界面");
     ui->stackedWidget->setCurrentIndex(2);
     connect(ui->mainButton,&QPushButton::clicked,this,[=](){
         ui->stackedWidget->setCurrentIndex(2);
     });
-    connect(ui->check_camera,&QPushButton::clicked,this,[=](){
-        ui->stackedWidget->setCurrentIndex(1);
-    });
-    connect(ui->ctrolButton,&QPushButton::clicked,this,[=](){
-        ui->stackedWidget->setCurrentIndex(3);
-    });
+    // connect(ui->check_camera,&QPushButton::clicked,this,[=](){
+    //     ui->stackedWidget->setCurrentIndex(1);
+    // });
+    // connect(ui->ctrolButton,&QPushButton::clicked,this,[=](){
+    //     ui->stackedWidget->setCurrentIndex(3);
+    // });
     connect(ui->messageButton,&QPushButton::clicked,this,[=](){
         ui->stackedWidget->setCurrentIndex(0);
     });
+    // 显式连接“停车场信息”按钮，避免自动连接失败
+    if (findChild<QPushButton*>("parkmessage")) {
+        connect(findChild<QPushButton*>("parkmessage"), &QPushButton::clicked, this, &car::on_parkmessage_clicked);
+    }
     video_Init();
     camera_Init();
-    park_num();
+    park_num(ui->parkcomboBox->currentText());
+    loadParkingComboBox(); // 加载车库名到下拉框
     //ui->camera->setGeometry(10, 10, 485, 300);
     // static int CameraCount = Camera::getCameraCount();
     // if( CameraCount !=0)
@@ -190,10 +199,9 @@ void car::camera_Init()
     camera->start();
 }
 
-void car::park_num()
+void car::park_num(QString pname)
 {
-    QString park_name=mysqlc.parkingname;
-    QString sql = QStringLiteral("SELECT P_now_count,  P_reserve_count FROM parking WHERE P_name = '%1'").arg(park_name);
+    QString sql = QStringLiteral("SELECT P_now_count,  P_reserve_count FROM parking WHERE P_name = '%1'").arg(pname);
     QSqlQuery q = mysqlc.execute(sql);
     q.next();
     int now_count=q.value(0).toInt();
@@ -235,7 +243,7 @@ void car::createPie(int reserve)
 
     chart=new QChart;
     chart->addSeries(series);
-    chart->setTitle(mysqlc.parkingname);
+    chart->setTitle(ui->parkcomboBox->currentText());
     chart->legend()->setVisible(true); // 显示图例
     chart->legend()->setAlignment(Qt::AlignBottom);
     chart->setBackgroundBrush(QBrush(QColor(255, 255, 255))); // 设置背景为白色
@@ -258,12 +266,14 @@ void car::slider_Changed()
 {
     pos=ui->horizontalSlider->value();
     player->setPosition(pos);
+    if(player->position()==player->duration()){
+        player->stop();
+    }
 }
 
 void car::On_position_Changed(qint64 position)
 {
     ui->horizontalSlider->setValue(int(position));
-
 }
 
 void car::on_fileopen_clicked()
@@ -279,10 +289,36 @@ void car::on_fileopen_clicked()
    /* player->setVideoOutput(videowidget);
     videowidget->setVisible(true);
     videowidget->raise();*/         //提升层级
+    if (!videoSink) {
+        // 创建并绑定 videoSink 到 UI 组件
+        videoSink = new QVideoSink(this);
+        ui->camera->setAttribute(Qt::WA_OpaquePaintEvent); // 优化渲染
+        connect(videoSink, &QVideoSink::videoFrameChanged, this, [this](const QVideoFrame &frame) {
+            // 自定义渲染逻辑（可选）
+            ui->camera->update();
+        });
+    }
+    player->setVideoSink(videoSink); // 关键：绑定视频输出
     filename=QFileDialog::getOpenFileName(this,"选择播放视频的文件","..\\");
     qDebug()<<filename;
     player->setSource(QUrl::fromLocalFile(filename));
     player->play();
+   //connect(videoSink,&QVideoSink::videoFrameChanged,rec,&PlateRecognize::frameRecognize);
+    static QTimer* frameTimer = nullptr;
+    if (!frameTimer) {
+        frameTimer = new QTimer(this);
+        connect(frameTimer, &QTimer::timeout, this, [this]() {
+            if (videoSink) {
+                QVideoFrame frame = videoSink->videoFrame();
+                if (frame.isValid()) {
+                    QMetaObject::invokeMethod(this->rec, [this, frame]() {
+                        this->rec->frameRecognize(frame);
+                    }, Qt::QueuedConnection);
+                }
+            }
+        });
+        frameTimer->start(100);
+}
 }
 
 
@@ -318,7 +354,8 @@ void car::on_camera_take_clicked()
         if (videoSink && videoSink->videoFrame().isValid()) {
             QVideoFrame frame = videoSink->videoFrame();
             frame.map(QVideoFrame::ReadOnly);
-            QImage image = frame.toImage();
+            //QImage image = frame.toImage();
+            QImage image = frame.toImage().convertToFormat(QImage::Format_RGB888);
             frame.unmap();
             emit plate_start(image);
             // if (!image.isNull()) {
@@ -388,11 +425,13 @@ void car::on_submitcar_clicked()
         qDebug()<<"现有车位"<<mysqlc.parking_now_count<<"预约量:"<<mysqlc.reserve<<"总车位:"<<mysqlc.parking_count;
         return;
     }
-    q.prepare("select check_in_time,check_out_time from car where license_plate=:license_plate");
+    QString parkingname=mysqlc.parkingname;
+    q.prepare("SELECT check_in_time, check_out_time FROM car WHERE license_plate = :license_plate ORDER BY check_in_time DESC LIMIT 1");
     q.bindValue(":license_plate",license_plate);
+    // q.bindValue(":parkingname",parkingname);
     q.exec();
     q.next();
-    if(!q.value(0).isNull()&&q.value(1).isNull()){   //入库时间不为空，出库时间为空 车辆还没出库
+    if(!q.value(0).isNull()&&q.value(1).isNull()){   //入库时间不为空，出库时间为空 车辆还没出库   !q.value(0).isNull()&&;
         QMessageBox::information(this,"入库失败","车辆还未出库");
         return;
     }
@@ -401,7 +440,7 @@ void car::on_submitcar_clicked()
     QString formattedDateTime = currentDateTime.toString("yyyy-MM-dd hh:mm:ss");
     //将信息上传到数据库
     //位置
-    QString location = mysqlc.parkingname;
+    QString location = ui->parkcomboBox->currentText();
 
     QString sql_submitCar = QStringLiteral("INSERT INTO CAR (license_plate, check_in_time,location) VALUES ('%1','%2','%3');").arg(license_plate,formattedDateTime,location);
 
@@ -412,10 +451,10 @@ void car::on_submitcar_clicked()
         QMessageBox::information(this,"停车入库","车牌入库成功!");
 
 
-        mysqlc.park_increase(); //让现有车库加一
+        mysqlc.park_increase(ui->parkcomboBox->currentText()); //让现有车库加一
         //emit now_count_acc_signal();
         qDebug()<<mysqlc.parking_now_count;
-        park_num();
+        park_num(ui->parkcomboBox->currentText());
 
     }
     else {
@@ -482,9 +521,9 @@ void car::on_deletecar_clicked()
 
         QMessageBox::information(this,"停车出库库",message);
         //车牌插入成功后，更新车库数据
-        mysqlc.park_reduce(); //让现有车位数量减一
+        mysqlc.park_reduce(ui->parkcomboBox->currentText()); //让现有车位数量减一
         //emit now_count_dec_signal();
-        park_num();
+        park_num(ui->parkcomboBox->currentText());
 
     }
     else {
@@ -525,12 +564,16 @@ void car::on_PieSliceHight(bool show)
 
 void car::on_messageButton_clicked()
 {
-    if ((camera && camera->isActive()) ||
-        (player && (player->playbackState() == QMediaPlayer::PlayingState ||
-                    player->playbackState() == QMediaPlayer::PausedState))){
+
+    if(camera->isActive()){
+        //停止摄像头
+        camera->stop();
+        //隐藏摄像头显示区域
+        //将显示区域设置为文件播放的videowidget
+    }
+    //viewfinder->setVisible(false);
+    if(player->isPlaying()){
         player->stop();
-        viewfinder->setVisible(false);
-        //videowidget->setVisible(false);
     }
     ui->tableWidget->clearContents();
     ui->tableWidget->setRowCount(0);
@@ -541,7 +584,8 @@ void car::on_messageButton_clicked()
     QStringList header;
     header<<"ID"<<"车牌号"<<"入库时间"<<"出库时间"<<"费用"<<"停车地点"<<"车费单价";
     ui->tableWidget->setHorizontalHeaderLabels(header);
-    QString sqlstrCar="SELECT id, license_plate, check_in_time, check_out_time, fee, location, P_fee FROM CAR JOIN parking ON Car.location = parking.P_name ORDER BY check_in_time DESC;";
+    QString parkingname=mysqlc.parkingname;
+    QString sqlstrCar="SELECT id, license_plate, check_in_time, check_out_time, fee, location, P_fee FROM CAR JOIN parking ON "+parkingname+" = parking.P_name ORDER BY check_in_time DESC;";
     QSqlQuery q=mysqlc.execute(sqlstrCar);
     int i = 0;
     while(q.next()) {
@@ -616,7 +660,7 @@ void car::on_cardelete_clicked()
             qDebug() << "CAR delete successfully.";
             car::on_messageButton_clicked(); //模拟点击，更新
             // TODO现有车位同步
-            mysqlc.park_reduce();
+            //mysqlc.park_reduce();
         }
         else
         {
@@ -624,5 +668,147 @@ void car::on_cardelete_clicked()
             qDebug() << "User Add error" << id;
         }
     }
+}
+
+//用户管理页面
+void car::on_ctrolButton_clicked()
+{
+
+}
+
+// 停车场信息管理
+void car::loadParkTable()
+{
+    ui->parktable->clearContents();
+    ui->parktable->setRowCount(0);
+    ui->parktable->setColumnCount(6);
+    QStringList header;
+    header<<"id"<<"停车场名称"<<"预约车位"<<"已经使用车位"<<"停车场容量"<<"单价";
+    ui->parktable->setHorizontalHeaderLabels(header);
+    ui->parktable->verticalHeader()->setVisible(false);
+    ui->parktable->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+
+    QString sql = QStringLiteral("SELECT P_id,P_name,P_reserve_count,P_now_count,P_all_count,P_fee FROM parking ORDER BY P_id");
+    QSqlQuery q = mysqlc.execute(sql);
+    int i = 0;
+    while(q.next()){
+        ui->parktable->setRowCount(i+1);
+        for(int c=0;c<6;++c){
+            ui->parktable->setItem(i,c,new QTableWidgetItem(q.value(c).toString()));
+            ui->parktable->item(i,c)->setTextAlignment(Qt::AlignHCenter|Qt::AlignVCenter);
+        }
+        // 第一列P_id只读
+        ui->parktable->item(i,0)->setFlags(ui->parktable->item(i,0)->flags() ^ Qt::ItemIsEditable);
+        ++i;
+    }
+}
+
+// 从数据库加载车库名到下拉框
+void car::loadParkingComboBox()
+{
+    // 清空下拉框
+    ui->parkcomboBox->clear();
+    
+    // 从数据库查询所有车库名
+    QString sql = QStringLiteral("SELECT P_name FROM parking ORDER BY P_id");
+    QSqlQuery query = mysqlc.execute(sql);
+    
+    // 将车库名添加到下拉框
+    while(query.next()){
+        QString parkingName = query.value(0).toString();
+        ui->parkcomboBox->addItem(parkingName);
+    }
+    
+    // 设置当前车库为默认选中项
+    QString currentParking = mysqlc.parkingname;
+    int index = ui->parkcomboBox->findText(currentParking);
+    if(index >= 0){
+        ui->parkcomboBox->setCurrentIndex(index);
+    }
+}
+
+void car::on_parkRefreshButton_clicked()
+{
+    loadParkTable();
+    loadParkingComboBox(); // 更新车库下拉框
+}
+
+void car::on_parkAddButton_clicked()
+{
+    ParkDialog dlg(this);
+    if(dlg.exec() != QDialog::Accepted) return;
+    if(dlg.pName().trimmed().isEmpty()){
+        QMessageBox::warning(this, "校验", "P_name 不能为空");
+        return;
+    }
+    QString sql = QStringLiteral("INSERT INTO parking (P_name,P_reserve_count,P_now_count,P_all_count,P_fee) VALUES ('%1',%2,%3,%4,%5)")
+            .arg(dlg.pName())
+            .arg(dlg.pReserve())
+            .arg(dlg.pNow())
+            .arg(dlg.pAll())
+            .arg(dlg.pFee());
+    if(mysqlc.bool_execute(sql)){
+        QMessageBox::information(this, "新增", "新增成功");
+        loadParkTable();
+        loadParkingComboBox(); // 更新车库下拉框
+    }else{
+        QMessageBox::warning(this, "新增", "新增失败");
+    }
+}
+
+void car::on_parkDeleteButton_clicked()
+{
+    int row = ui->parktable->currentRow();
+    if(row<0) return;
+    QString id = ui->parktable->item(row,0)->text();
+    if(id.isEmpty()) return;
+    if(QMessageBox::question(this, "删除", "确认删除该停车场? ")!=QMessageBox::Yes) return;
+    QString sql = QStringLiteral("DELETE FROM parking WHERE P_id=%1").arg(id);
+    if(mysqlc.bool_execute(sql)){
+        loadParkTable();
+        loadParkingComboBox(); // 更新车库下拉框
+    }else{
+        QMessageBox::warning(this, "删除", "删除失败");
+    }
+}
+
+void car::on_parkUpdateButton_clicked()
+{
+    int row = ui->parktable->currentRow();
+    if(row<0) return;
+    QString id = ui->parktable->item(row,0)->text();
+    QString name = ui->parktable->item(row,1)->text();
+    int reserve = ui->parktable->item(row,2)->text().toInt();
+    int now = ui->parktable->item(row,3)->text().toInt();
+    int allCount = ui->parktable->item(row,4)->text().toInt();
+    double fee = ui->parktable->item(row,5)->text().toDouble();
+
+    QString sql = QStringLiteral("UPDATE parking SET P_name='%1', P_reserve_count=%2, P_now_count=%3, P_all_count=%4, P_fee=%5 WHERE P_id=%6")
+            .arg(name).arg(reserve).arg(now).arg(allCount).arg(fee).arg(id);
+    if(mysqlc.bool_execute(sql)){
+        QMessageBox::information(this, "保存修改", "更新成功");
+        loadParkTable();
+        loadParkingComboBox(); // 更新车库下拉框
+    }else{
+        QMessageBox::warning(this, "保存修改", "更新失败");
+    }
+}
+
+void car::on_parkmessage_clicked()
+{
+    if(camera && camera->isActive()){
+        camera->stop();
+    }
+    if(player && player->isPlaying()){
+        player->stop();
+    }
+    ui->stackedWidget->setCurrentIndex(4);
+    loadParkTable();
+}
+
+
+void car::on_parkcomboBox_currentIndexChanged(int index)
+{
+    park_num(ui->parkcomboBox->currentText());
 }
 

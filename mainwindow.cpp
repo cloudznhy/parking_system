@@ -11,8 +11,6 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     setWindowTitle("登录");
 
-
-
     //创建登陆界面左边背景图
     // 创建QPixmap对象，加载png图像存储到pix变量中，使用new关键字分配堆内存来储存该对象
     QPixmap *pix=new QPixmap(":/images/welcome.png");

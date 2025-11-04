@@ -41,7 +41,8 @@ HEADERS += \
     mysqlinit.h \
     platerecognize.h \
     signup.h \
-    updatepie.h
+    updatepie.h \
+    parkdialog.h
 
 FORMS += \
     car.ui \
